@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cluster Simulation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Cluster Simulation Framework</h1>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5>Node Management</h5>
+                        <button id="refreshNodesBtn" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <form id="addNodeForm" class="mb-3">
+                            <div class="mb-3">
+                                <label for="cpuCores" class="form-label">CPU Cores</label>
+                                <input type="number" class="form-control" id="cpuCores" min="1" value="2" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Node</button>
+                        </form>
+                        
+                        <div class="mb-3">
+                            <h6>Trigger Heartbeat</h6>
+                            <div class="input-group">
+                                <select id="heartbeatNodeSelect" class="form-select">
+                                    <option value="">Select node</option>
+                                </select>
+                                <button id="triggerHeartbeatBtn" class="btn btn-warning">Trigger</button>
+                            </div>
+                        </div>
+                        
+                        <div id="nodesList"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5>Pod Management</h5>
+                        <button id="refreshPodsBtn" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <form id="launchPodForm" class="mb-3">
+                            <div class="mb-3">
+                                <label for="podCpu" class="form-label">CPU Required</label>
+                                <input type="number" class="form-control" id="podCpu" min="1" value="1" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Launch Pod</button>
+                        </form>
+                        <div id="podStatus"></div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Cluster Visualization</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="clusterVisualization">
+                            <div class="text-center py-4 text-muted">
+                                <i class="bi bi-diagram-3 fs-1"></i>
+                                <p class="mt-2">No nodes in cluster</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+.cluster-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.cluster-node {
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 15px;
+    width: 200px;
+    background-color: #f8f9fa;
+}
+
+.node-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.node-header h6 {
+    margin: 0;
+    font-weight: bold;
+}
+
+.node-resources {
+    margin-bottom: 10px;
+}
+
+.resource-bar {
+    height: 10px;
+    background-color: #e9ecef;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.resource-usage {
+    height: 100%;
+    background-color: #0d6efd;
+}
+
+.node-pods {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-height: 30px;
+    align-items: center;
+}
+
+.pod {
+    background-color: #0d6efd;
+    color: white;
+    width: 25px;
+    height: 25px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+.node-healthy {
+    border-left: 4px solid #198754;
+}
+
+.node-unhealthy {
+    border-left: 4px solid #dc3545;
+}
