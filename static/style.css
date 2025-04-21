@@ -68,3 +68,9 @@
 .node-unhealthy {
     border-left: 4px solid #dc3545;
 }
+
+.node-terminated {
+    border-left: 4px solid #6c757d;
+    opacity: 0.7;
+    background-color: #f8f9fa;
+}

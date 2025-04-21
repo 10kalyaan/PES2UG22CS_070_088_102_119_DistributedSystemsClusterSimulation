@@ -59,6 +59,12 @@
                                 <label for="podCpu" class="form-label">CPU Required</label>
                                 <input type="number" class="form-control" id="podCpu" min="1" value="1" required>
                             </div>
+                            <div class="mb-3">
+                                <label for="schedulingAlgorithm" class="form-label">Scheduling Algorithm</label>
+                                <select class="form-select" id="schedulingAlgorithm" required>
+                                    <!-- Options will be populated by JavaScript -->
+                                </select>
+                            </div>
                             <button type="submit" class="btn btn-primary">Launch Pod</button>
                         </form>
                         <div id="podStatus"></div>

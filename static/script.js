@@ -4,7 +4,8 @@ const AUTO_REFRESH_INTERVAL = 5000; // 5 seconds
 document.addEventListener('DOMContentLoaded', function() {
     // Start auto-refresh
     startAutoRefresh();
-    
+    loadSchedulingAlgorithms();
+
     // Add Node Form
     document.getElementById('addNodeForm').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('launchPodForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const podCpu = document.getElementById('podCpu').value;
+        const algorithm = document.getElementById('schedulingAlgorithm').value;
         const podStatus = document.getElementById('podStatus');
         podStatus.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
         
@@ -48,7 +50,10 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ cpu_required: parseInt(podCpu) })
+            body: JSON.stringify({ 
+                cpu_required: parseInt(podCpu),
+                algorithm: algorithm
+            })
         })
         .then(response => response.json())
         .then(data => {
@@ -57,7 +62,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="alert alert-success">
                         Pod launched successfully!<br>
                         Pod ID: ${data.pod_id}<br>
-                        Assigned to Node: ${data.node_id}
+                        Assigned to Node: ${data.node_id}<br>
+                        Algorithm: ${algorithm.replace('_', ' ')}
                     </div>
                 `;
                 refreshAllData();
@@ -204,12 +210,27 @@ function refreshPods() {
         const tbody = document.createElement('tbody');
         data.pods.forEach(pod => {
             const tr = document.createElement('tr');
+            
+            // Determine badge class based on status
+            let badgeClass = '';
+            if (pod.status === 'running') {
+                badgeClass = 'bg-success';
+            } else if (pod.status === 'rescheduling') {
+                badgeClass = 'bg-warning';
+            } else if (pod.status === 'failed') {
+                badgeClass = 'bg-danger';
+            } else if (pod.status === 'terminated') {
+                badgeClass = 'bg-secondary';
+            } else {
+                badgeClass = 'bg-info'; // default for unknown states
+            }
+            
             tr.innerHTML = `
                 <td>${pod.pod_id}</td>
                 <td>${pod.cpu_required}</td>
                 <td>${pod.node_id}</td>
                 <td>
-                    <span class="badge ${pod.status === 'running' ? 'bg-success' : 'bg-warning'}">
+                    <span class="badge ${badgeClass}">
                         ${pod.status}
                     </span>
                 </td>
@@ -247,14 +268,30 @@ function updateClusterVisualization(nodes) {
         const usedCpu = node.cpu_cores - node.available_cpu;
         const cpuPercentage = (usedCpu / node.cpu_cores) * 100;
         
+        // Determine border color based on status
+        let borderClass = '';
+        if (node.status === 'terminated') {
+            borderClass = 'node-terminated';
+        } else if (node.status === 'healthy') {
+            borderClass = 'node-healthy';
+        } else {
+            borderClass = 'node-unhealthy';
+        }
+        
         html += `
-            <div class="cluster-node ${node.status === 'healthy' ? 'node-healthy' : 'node-unhealthy'}">
+            <div class="cluster-node ${borderClass}">
                 <div class="node-header">
                     <h6>${node.node_id}</h6>
-                    <span class="badge ${node.status === 'healthy' ? 'bg-success' : 'bg-danger'}">
+                    <span class="badge ${node.status === 'healthy' ? 'bg-success' : 
+                                      node.status === 'unhealthy' ? 'bg-danger' : 'bg-secondary'}">
                         ${node.status}
                     </span>
                 </div>
+                ${node.status === 'terminated' ? `
+                <div class="alert alert-warning py-1 my-1">
+                    <small>Container terminated</small>
+                </div>
+                ` : ''}
                 <div class="node-resources">
                     <div class="resource-bar">
                         <div class="resource-usage" style="width: ${cpuPercentage}%"></div>
@@ -279,6 +316,7 @@ function updateClusterVisualization(nodes) {
     visualization.innerHTML = html;
 }
 
+
 function startAutoRefresh() {
     // Initial load
     refreshAllData();
@@ -294,5 +332,27 @@ function startAutoRefresh() {
             refreshAllData();
             autoRefreshInterval = setInterval(refreshAllData, AUTO_REFRESH_INTERVAL);
         }
+    });
+}
+
+function loadSchedulingAlgorithms() {
+    fetch('/scheduling-algorithms')
+    .then(response => response.json())
+    .then(data => {
+        const select = document.getElementById('schedulingAlgorithm');
+        select.innerHTML = '';
+        
+        data.algorithms.forEach(alg => {
+            const option = document.createElement('option');
+            option.value = alg;
+            option.textContent = alg.replace('_', ' ');
+            if (alg === data.default) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+    })
+    .catch(error => {
+        console.error('Error loading scheduling algorithms:', error);
     });
 }

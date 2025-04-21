@@ -4,6 +4,8 @@ import time
 import threading
 from collections import defaultdict
 from datetime import datetime
+import random
+from enum import Enum
 
 app = Flask(__name__)
 
@@ -17,6 +19,55 @@ pods = {}   # {pod_id: {'cpu_required': int, 'node_id': str, 'created_at': times
 # ID counters
 node_id_counter = 1
 pod_id_counter = 1
+
+class SchedulingAlgorithm(Enum):
+    FIRST_FIT = "first_fit"
+    BEST_FIT = "best_fit"
+    WORST_FIT = "worst_fit"
+
+def select_node(cpu_required, algorithm):
+    healthy_nodes = [node_id for node_id, node_info in nodes.items() 
+                    if (time.time() - node_info['last_heartbeat']) < 30 
+                    and node_info['available_cpu'] >= cpu_required]
+    
+    if not healthy_nodes:
+        return None
+    
+    if algorithm == SchedulingAlgorithm.FIRST_FIT.value:
+        # First-Fit: Select the first node that has enough resources
+        for node_id in healthy_nodes:
+            if nodes[node_id]['available_cpu'] >= cpu_required:
+                return node_id
+    
+    elif algorithm == SchedulingAlgorithm.BEST_FIT.value:
+        # Best-Fit: Select the node with the smallest available CPU that can fit the pod
+        best_node = None
+        min_diff = float('inf')
+        
+        for node_id in healthy_nodes:
+            available = nodes[node_id]['available_cpu']
+            if available >= cpu_required:
+                diff = available - cpu_required
+                if diff < min_diff:
+                    min_diff = diff
+                    best_node = node_id
+        
+        return best_node
+    
+    elif algorithm == SchedulingAlgorithm.WORST_FIT.value:
+        # Worst-Fit: Select the node with the largest available CPU
+        worst_node = None
+        max_available = -1
+        
+        for node_id in healthy_nodes:
+            available = nodes[node_id]['available_cpu']
+            if available >= cpu_required and available > max_available:
+                max_available = available
+                worst_node = node_id
+        
+        return worst_node
+    
+    return None
 
 @app.route('/')
 def index():
@@ -67,8 +118,27 @@ def list_nodes():
     node_list = []
     
     for node_id, node_info in nodes.items():
-        # Check if node is healthy (heartbeat within last 30 seconds)
-        is_healthy = (current_time - node_info['last_heartbeat']) < 30
+        # First check if container exists and is running
+        container_running = False
+        try:
+            container = docker_client.containers.get(node_info['container_id'])
+            container_running = container.status == 'running'
+        except:
+            pass
+        
+        # Determine node status
+        if not container_running:
+            status = 'terminated'
+            # Ensure we've attempted to reschedule pods
+            if node_info.get('status') != 'terminated':
+                reschedule_pods_from_failed_node(node_id)
+        elif (current_time - node_info['last_heartbeat']) > 30:
+            status = 'unhealthy'
+        else:
+            status = 'healthy'
+        
+        # Update node status in our records
+        nodes[node_id]['status'] = status
         
         node_list.append({
             'node_id': node_id,
@@ -76,28 +146,27 @@ def list_nodes():
             'available_cpu': node_info['available_cpu'],
             'pods': node_info['pods'],
             'pods_count': len(node_info['pods']),
-            'status': 'healthy' if is_healthy else 'unhealthy',
+            'status': status,
             'last_heartbeat': node_info['last_heartbeat'],
             'created_at': node_info['created_at'],
-            'container_id': node_info['container_id']
+            'container_id': node_info['container_id'],
+            'container_running': container_running
         })
     
     return jsonify({'nodes': node_list})
 
+
 # Pod Management Endpoints
+# Modify the launch_pod endpoint to use the selected algorithm
 @app.route('/pods', methods=['POST'])
 def launch_pod():
     global pod_id_counter
     data = request.json
     cpu_required = data.get('cpu_required', 1)
+    algorithm = data.get('algorithm', SchedulingAlgorithm.FIRST_FIT.value)
     
-    # Find a suitable node using first-fit algorithm
-    selected_node = None
-    for node_id, node_info in nodes.items():
-        # Check if node is healthy and has enough resources
-        if (time.time() - node_info['last_heartbeat']) < 30 and node_info['available_cpu'] >= cpu_required:
-            selected_node = node_id
-            break
+    # Find a suitable node using the selected algorithm
+    selected_node = select_node(cpu_required, algorithm)
     
     if not selected_node:
         return jsonify({
@@ -125,6 +194,90 @@ def launch_pod():
         'pod_id': pod_id,
         'node_id': selected_node
     })
+
+def reschedule_pods_from_failed_node(failed_node_id):
+    if failed_node_id not in nodes:
+        return
+    
+    # Get all pods that were on the failed node
+    pods_to_reschedule = [pod_id for pod_id, pod_info in pods.items()
+                         if pod_info['node_id'] == failed_node_id]
+    
+    if not pods_to_reschedule:
+        return
+    
+    print(f"Attempting to reschedule {len(pods_to_reschedule)} pods from failed node {failed_node_id}")
+    
+    rescheduled_count = 0
+    for pod_id in pods_to_reschedule:
+        pod_info = pods[pod_id]
+        
+        # Skip if already rescheduled or failed
+        if pod_info['status'] in ['rescheduled', 'failed']:
+            continue
+            
+        cpu_required = pod_info['cpu_required']
+        
+        # Mark as rescheduling
+        pod_info['status'] = 'rescheduling'
+        
+        # Try to find a new node (using first-fit for rescheduling)
+        new_node = select_node(cpu_required, SchedulingAlgorithm.FIRST_FIT.value)
+        
+        if new_node:
+            # Free resources from old node
+            nodes[failed_node_id]['available_cpu'] += cpu_required
+            if pod_id in nodes[failed_node_id]['pods']:
+                nodes[failed_node_id]['pods'].remove(pod_id)
+            
+            # Allocate to new node
+            pod_info['node_id'] = new_node
+            pod_info['status'] = 'running'
+            nodes[new_node]['pods'].append(pod_id)
+            nodes[new_node]['available_cpu'] -= cpu_required
+            rescheduled_count += 1
+            print(f"Rescheduled pod {pod_id} to node {new_node}")
+        else:
+            pod_info['status'] = 'failed'
+            print(f"Could not reschedule pod {pod_id} - no available nodes")
+    
+    print(f"Rescheduled {rescheduled_count} pods from node {failed_node_id}")
+    
+    # If all pods rescheduled, we can optionally remove the failed node
+    if all(pod_info['status'] != 'running' for pod_id, pod_info in pods.items() 
+           if pod_info['node_id'] == failed_node_id):
+        print(f"All pods rescheduled from {failed_node_id}, removing from cluster")
+        del nodes[failed_node_id]
+
+# Modify the health check thread to handle pod rescheduling
+def check_node_health():
+    while True:
+        current_time = time.time()
+        
+        # First check all containers
+        for node_id, node_info in list(nodes.items()):
+            try:
+                container = docker_client.containers.get(node_info['container_id'])
+                if container.status != 'running':
+                    print(f"Container for node {node_id} is not running, status: {container.status}")
+                    reschedule_pods_from_failed_node(node_id)
+                    nodes[node_id]['status'] = 'terminated'
+            except Exception as e:
+                print(f"Container for node {node_id} not found: {str(e)}")
+                reschedule_pods_from_failed_node(node_id)
+                nodes[node_id]['status'] = 'terminated'
+        
+        # Then check heartbeats
+        for node_id, node_info in nodes.items():
+            if node_info.get('status') == 'terminated':
+                continue
+                
+            if (current_time - node_info['last_heartbeat']) > 30:
+                print(f"Node {node_id} missed heartbeat")
+                reschedule_pods_from_failed_node(node_id)
+                nodes[node_id]['status'] = 'unhealthy'
+        
+        time.sleep(3)  # Check every 3 seconds
 
 @app.route('/pods', methods=['GET'])
 def list_pods():
@@ -160,6 +313,29 @@ def check_node_health():
             if (current_time - node_info['last_heartbeat']) > 30:
                 print(f"Node {node_id} is unhealthy")
         time.sleep(10)
+
+@app.route('/scheduling-algorithms', methods=['GET'])
+def get_scheduling_algorithms():
+    return jsonify({
+        'algorithms': [alg.value for alg in SchedulingAlgorithm],
+        'default': SchedulingAlgorithm.FIRST_FIT.value
+    })
+
+# Add this function to simulate automatic heartbeats
+def simulate_automatic_heartbeats():
+    while True:
+        for node_id in nodes:
+            # Random jitter to simulate real-world conditions
+            if random.random() < 0.9:  # 90% chance to send heartbeat
+                nodes[node_id]['last_heartbeat'] = time.time()
+        
+        # Sleep for a random interval between 5-15 seconds
+        time.sleep(random.uniform(5, 15))
+
+# Start automatic heartbeat thread
+heartbeat_thread = threading.Thread(target=simulate_automatic_heartbeats)
+heartbeat_thread.daemon = True
+heartbeat_thread.start()
 
 # Start health check thread
 health_thread = threading.Thread(target=check_node_health)
