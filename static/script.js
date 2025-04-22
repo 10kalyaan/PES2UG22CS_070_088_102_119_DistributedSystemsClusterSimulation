@@ -2,11 +2,9 @@ let autoRefreshInterval;
 const AUTO_REFRESH_INTERVAL = 5000; // 5 seconds
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Start auto-refresh
     startAutoRefresh();
     loadSchedulingAlgorithms();
 
-    // Add Node Form
     document.getElementById('addNodeForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const cpuCores = document.getElementById('cpuCores').value;
@@ -33,11 +31,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // List/Refresh Nodes Button
     document.getElementById('refreshNodesBtn').addEventListener('click', refreshNodes);
     document.getElementById('refreshPodsBtn').addEventListener('click', refreshPods);
     
-    // Launch Pod Form
     document.getElementById('launchPodForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const podCpu = document.getElementById('podCpu').value;
@@ -85,7 +81,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Trigger Heartbeat Button
     document.getElementById('triggerHeartbeatBtn').addEventListener('click', function() {
         const nodeId = document.getElementById('heartbeatNodeSelect').value;
         if (!nodeId) return;
@@ -119,7 +114,6 @@ function refreshNodes() {
         const nodesList = document.getElementById('nodesList');
         const heartbeatSelect = document.getElementById('heartbeatNodeSelect');
         
-        // Update nodes list
         nodesList.innerHTML = '';
         heartbeatSelect.innerHTML = '<option value="">Select node</option>';
         
@@ -132,7 +126,6 @@ function refreshNodes() {
         const table = document.createElement('table');
         table.className = 'table table-striped';
         
-        // Table header
         const thead = document.createElement('thead');
         thead.innerHTML = `
             <tr>
@@ -162,7 +155,6 @@ function refreshNodes() {
             `;
             tbody.appendChild(tr);
             
-            // Add to heartbeat select
             const option = document.createElement('option');
             option.value = node.node_id;
             option.textContent = node.node_id;
@@ -193,7 +185,6 @@ function refreshPods() {
         const table = document.createElement('table');
         table.className = 'table table-striped';
         
-        // Table header
         const thead = document.createElement('thead');
         thead.innerHTML = `
             <tr>
@@ -206,12 +197,10 @@ function refreshPods() {
         `;
         table.appendChild(thead);
         
-        // Table body
         const tbody = document.createElement('tbody');
         data.pods.forEach(pod => {
             const tr = document.createElement('tr');
             
-            // Determine badge class based on status
             let badgeClass = '';
             if (pod.status === 'running') {
                 badgeClass = 'bg-success';
@@ -222,7 +211,7 @@ function refreshPods() {
             } else if (pod.status === 'terminated') {
                 badgeClass = 'bg-secondary';
             } else {
-                badgeClass = 'bg-info'; // default for unknown states
+                badgeClass = 'bg-info';
             }
             
             tr.innerHTML = `
@@ -267,8 +256,6 @@ function updateClusterVisualization(nodes) {
     nodes.forEach(node => {
         const usedCpu = node.cpu_cores - node.available_cpu;
         const cpuPercentage = (usedCpu / node.cpu_cores) * 100;
-        
-        // Determine border color based on status
         let borderClass = '';
         if (node.status === 'terminated') {
             borderClass = 'node-terminated';
@@ -318,13 +305,8 @@ function updateClusterVisualization(nodes) {
 
 
 function startAutoRefresh() {
-    // Initial load
     refreshAllData();
-    
-    // Set up interval
     autoRefreshInterval = setInterval(refreshAllData, AUTO_REFRESH_INTERVAL);
-    
-    // Stop auto-refresh when tab is not visible
     document.addEventListener('visibilitychange', function() {
         if (document.hidden) {
             clearInterval(autoRefreshInterval);
